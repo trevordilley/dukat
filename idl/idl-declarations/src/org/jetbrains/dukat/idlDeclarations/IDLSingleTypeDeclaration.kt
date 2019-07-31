@@ -8,29 +8,29 @@ data class IDLSingleTypeDeclaration(
 ) : IDLTypeDeclaration
 
 fun IDLSingleTypeDeclaration.isPrimitive(): Boolean {
-    return name in listOf(
-            "void",
-            "float",
-            "unrestrictedfloat",
-            "double",
-            "unrestricteddouble",
-            "long",
-            "unsignedlong",
-            "longlong",
-            "unsignedlonglong",
-            "octet",
-            "byte",
-            "short",
-            "unsignedshort",
-            "boolean",
+    return name in setOf(
             "ByteString",
+            "DOMError",
             "DOMString",
             "USVString",
             "\$Array",
-            "sequence",
-            "object",
-            "DOMError",
             "\$dynamic",
-            "any"
+            "any",
+            "boolean",
+            "byte",
+            "double",
+            "float",
+            "long",
+            "longlong",
+            "object",
+            "octet",
+            "sequence",
+            "short",
+            "unrestricteddouble",
+            "unrestrictedfloat",
+            "unsignedlong",
+            "unsignedlonglong",
+            "unsignedshort",
+            "void"
     )
 }
