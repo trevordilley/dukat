@@ -6,15 +6,15 @@ import org.jetbrains.dukat.idlDeclarations.IDLSingleTypeDeclaration
 import org.jetbrains.dukat.idlDeclarations.changeComment
 import java.math.BigInteger
 
-private class DefaultValueSpecifier : IDLLowering {
-
-    private fun toBigInteger(string: String): BigInteger {
-        return if (string.startsWith("0x")) {
-            BigInteger(string.substring(2), 16)
-        } else {
-            BigInteger(string)
-        }
+private fun String.toBigInteger(): BigInteger {
+    return if (startsWith("0x")) {
+        BigInteger(substring(2), 16)
+    } else {
+        BigInteger(this)
     }
+}
+
+private class DefaultValueSpecifier : IDLLowering {
 
     private fun IDLDictionaryMemberDeclaration.specifyDefaultValue(): String? {
         if (defaultValue == null) {
