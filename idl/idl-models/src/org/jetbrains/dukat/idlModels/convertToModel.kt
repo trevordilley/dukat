@@ -90,25 +90,25 @@ fun IDLSingleTypeDeclaration.process(): TypeValueModel {
 fun IDLFunctionTypeDeclaration.process(): FunctionTypeModel {
     return FunctionTypeModel(
             parameters = arguments.map { it.process() },
-            type = returnType.process()!!,
+            type = returnType.process(),
             metaDescription = comment,
             nullable = nullable
     )
 }
 
-fun IDLTypeDeclaration.process(): TypeModel? {
+fun IDLTypeDeclaration.process(): TypeModel {
     return when (this) {
         is IDLSingleTypeDeclaration -> process()
         is IDLFunctionTypeDeclaration -> process()
         //there shouldn't be any UnionTypeDeclarations at this stage
-        else -> raiseConcern("unprocessed type declaration: ${this}") { null }
+        else -> raiseConcern("unprocessed type declaration: ${this}") { TypeValueModel(IdentifierEntity("IMPOSSIBLE"), listOf(), null) }
     }
 }
 
 fun IDLArgumentDeclaration.process(): ParameterModel {
     return ParameterModel(
             name = name,
-            type = type.process()!!,
+            type = type.process(),
             initializer = null,
             vararg = false,
             optional = false
@@ -175,7 +175,7 @@ fun IDLInterfaceDeclaration.convertToModel(): TopLevelModel {
 fun IDLDictionaryMemberDeclaration.convertToParameterModel(): ParameterModel {
     return ParameterModel(
             name = name,
-            type = type.toNullable().changeComment(null).process()!!,
+            type = type.toNullable().changeComment(null).process(),
             initializer = if (defaultValue != null) {
                 StatementCallModel(
                         IdentifierEntity(defaultValue!!),
@@ -282,7 +282,7 @@ fun IDLMemberDeclaration.process(): MemberModel? {
     return when (this) {
         is IDLAttributeDeclaration -> PropertyModel(
                 name = IdentifierEntity(name),
-                type = type.process()!!,
+                type = type.process(),
                 typeParameters = listOf(),
                 static = false,
                 override = false,
@@ -293,7 +293,7 @@ fun IDLMemberDeclaration.process(): MemberModel? {
         is IDLOperationDeclaration -> MethodModel(
                 name = IdentifierEntity(name),
                 parameters = arguments.map { it.process() },
-                type = returnType.process()!!,
+                type = returnType.process(),
                 typeParameters = listOf(),
                 static = false,
                 override = false,
@@ -308,7 +308,7 @@ fun IDLMemberDeclaration.process(): MemberModel? {
         )
         is IDLConstantDeclaration -> PropertyModel(
                 name = IdentifierEntity(name),
-                type = type.process()!!,
+                type = type.process(),
                 typeParameters = listOf(),
                 static = false,
                 override = false,
@@ -318,7 +318,7 @@ fun IDLMemberDeclaration.process(): MemberModel? {
         )
         is IDLDictionaryMemberDeclaration -> PropertyModel(
                 name = IdentifierEntity(name),
-                type = type.toNullable().process()!!,
+                type = type.toNullable().process(),
                 typeParameters = listOf(),
                 static = false,
                 override = false,
