@@ -3,7 +3,14 @@ package org.jetbrains.dukat.idlParser.visitors
 import org.antlr.v4.runtime.tree.TerminalNode
 import org.antlr.webidl.WebIDLBaseVisitor
 import org.antlr.webidl.WebIDLParser
-import org.jetbrains.dukat.idlDeclarations.*
+import org.jetbrains.dukat.idlDeclarations.IDLArgumentDeclaration
+import org.jetbrains.dukat.idlDeclarations.IDLAttributeDeclaration
+import org.jetbrains.dukat.idlDeclarations.IDLConstantDeclaration
+import org.jetbrains.dukat.idlDeclarations.IDLDictionaryMemberDeclaration
+import org.jetbrains.dukat.idlDeclarations.IDLMemberDeclaration
+import org.jetbrains.dukat.idlDeclarations.IDLOperationDeclaration
+import org.jetbrains.dukat.idlDeclarations.IDLSingleTypeDeclaration
+import org.jetbrains.dukat.idlDeclarations.IDLTypeDeclaration
 import org.jetbrains.dukat.idlParser.getFirstValueOrNull
 import org.jetbrains.dukat.idlParser.getName
 import org.jetbrains.dukat.idlParser.getNameOrNull
@@ -11,8 +18,8 @@ import org.jetbrains.dukat.idlParser.getNameOrNull
 internal class MemberVisitor : WebIDLBaseVisitor<IDLMemberDeclaration>() {
     private var kind: MemberKind = MemberKind.ATTRIBUTE
 
-    private var name : String = ""
-    private var type : IDLTypeDeclaration = IDLSingleTypeDeclaration("", null, false)
+    private var name: String = ""
+    private var type: IDLTypeDeclaration = IDLSingleTypeDeclaration("", null, false)
     private val arguments: MutableList<IDLArgumentDeclaration> = mutableListOf()
     private var constValue: String? = null
     private var static: Boolean = false

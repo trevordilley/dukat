@@ -1,6 +1,10 @@
 package org.jetbrains.dukat.idlLowerings
 
-import org.jetbrains.dukat.idlDeclarations.*
+import org.jetbrains.dukat.idlDeclarations.IDLFileDeclaration
+import org.jetbrains.dukat.idlDeclarations.IDLImplementsStatementDeclaration
+import org.jetbrains.dukat.idlDeclarations.IDLInterfaceDeclaration
+import org.jetbrains.dukat.idlDeclarations.IDLSingleTypeDeclaration
+import org.jetbrains.dukat.idlDeclarations.IDLTopLevelDeclaration
 
 private class ImplementsStatementContext : IDLLowering {
     private val missingInheritances: MutableMap<String, MutableList<IDLSingleTypeDeclaration>> = mutableMapOf()
