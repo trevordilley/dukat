@@ -30,6 +30,12 @@ class CoreSetTestsCli {
 
             val resolvedEntities = mutableListOf<Array<String>>()
 
+            println("DEF TYPE INSPECTION BEGIN")
+            File(TestConfig.DEFINITELY_TYPED_DIR).walk().forEach {
+                println("=======> ${it.absolutePath}")
+            }
+            println("DEF TYPE INSPECTION END")
+
             packages.forEach { descriptor ->
                 val sourceDir = File(DEFINITELY_TYPED_DIR, descriptor)
                 val sourcePath = File(sourceDir, "index.d.ts")
