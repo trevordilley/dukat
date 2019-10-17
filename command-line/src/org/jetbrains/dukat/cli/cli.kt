@@ -10,12 +10,7 @@ import org.jetbrains.dukat.moduleNameResolver.CommonJsNameResolver
 import org.jetbrains.dukat.moduleNameResolver.ConstNameResolver
 import org.jetbrains.dukat.panic.PanicMode
 import org.jetbrains.dukat.panic.setPanicMode
-import org.jetbrains.dukat.translator.InputTranslator
-import org.jetbrains.dukat.translator.ModuleTranslationUnit
-import org.jetbrains.dukat.translator.ROOT_PACKAGENAME
-import org.jetbrains.dukat.translator.TranslationErrorFileNotFound
-import org.jetbrains.dukat.translator.TranslationErrorInvalidFile
-import org.jetbrains.dukat.translator.TranslationUnitResult
+import org.jetbrains.dukat.translator.*
 import org.jetbrains.dukat.translatorString.IDL_DECLARATION_EXTENSION
 import org.jetbrains.dukat.translatorString.TS_DECLARATION_EXTENSION
 import org.jetbrains.dukat.translatorString.WEBIDL_DECLARATION_EXTENSION
@@ -38,14 +33,21 @@ private fun TranslationUnitResult.resolveAsError(source: String): String {
     }
 }
 
-private fun compile(outDir: String?, translator: InputTranslator<ByteArray>, pathToReport: String?) {
-    val translatedUnits = translateModule(System.`in`.readBytes(), translator)
+private fun compileSourcesFromByteArray(outDir: String?, filenames: List<String>, translator: InputTranslator<ByteArray>, pathToReport: String?) {
+    val translatedUnits: List<TranslationUnitResult> = filenames.flatMap { filename ->
+        val sourceFile = File(filename)
+        translateModule(sourceFile.readBytes(), translator)
+    }
+    compileUnits(translatedUnits, outDir, pathToReport)
+}
 
+private fun compileSourcesFromStdIn(outDir: String?, translator: InputTranslator<ByteArray>, pathToReport: String?) {
+    val translatedUnits = translateModule(System.`in`.readBytes(), translator)
     compileUnits(translatedUnits, outDir, pathToReport)
 }
 
 private fun compile(filenames: List<String>, outDir: String?, translator: InputTranslator<String>, pathToReport: String?) {
-    val translatedUnits: List<TranslationUnitResult> =  filenames.flatMap { filename ->
+    val translatedUnits: List<TranslationUnitResult> = filenames.flatMap { filename ->
         val sourceFile = File(filename)
 
         translateModule(sourceFile.absolutePath, translator)
@@ -126,6 +128,7 @@ where possible options include:
     -m  String                      use this value as @file:JsModule annotation value whenever such annotation occurs
     -d  <path>                      destination directory for files with converted declarations (by default declarations are generated in current directory)
     -v, -version                    print version
+    --file                          read file paths instead of from stdio (useful when running cli jar directly)
 """.trimIndent())
 }
 
@@ -136,7 +139,8 @@ private data class CliOptions(
         val basePackageName: NameEntity,
         val jsModuleName: String?,
         val reportPath: String?,
-        val tsDefaultLib: String
+        val tsDefaultLib: String,
+        val forceReadFilePath: Boolean
 )
 
 
@@ -156,6 +160,7 @@ private fun process(args: List<String>): CliOptions? {
     var basePackageName: NameEntity = ROOT_PACKAGENAME
     var jsModuleName: String? = null
     var reportPath: String? = null
+    var forceReadFilePath: Boolean = false
     while (argsIterator.hasNext()) {
         val arg = argsIterator.next()
         when (arg) {
@@ -203,6 +208,10 @@ private fun process(args: List<String>): CliOptions? {
 
             }
 
+            "--file" -> {
+                forceReadFilePath = true
+            }
+
             else -> when {
                 arg.equals("-") -> sources.add("-")
                 arg.endsWith(TS_DECLARATION_EXTENSION) -> {
@@ -226,7 +235,7 @@ following file extensions are supported:
 
     val tsDefaultLib = File(PACKAGE_DIR, "d.ts.libs/lib.d.ts").absolutePath;
 
-    return CliOptions(sources, outDir, basePackageName, jsModuleName, reportPath, tsDefaultLib)
+    return CliOptions(sources, outDir, basePackageName, jsModuleName, reportPath, tsDefaultLib, forceReadFilePath)
 }
 
 fun main(vararg args: String) {
@@ -256,17 +265,30 @@ fun main(vararg args: String) {
 
         when {
             isTsTranslation -> {
-                compile(
-                        options.outDir,
-                        createJsByteArrayTranslator(
-                                moduleResolver
-                        ),
-                        options.reportPath
-                )
+                if (options.forceReadFilePath) {
+                    compileSourcesFromByteArray(
+                            options.outDir,
+                            options.sources,
+                            createJsByteArrayTranslator(
+                                    moduleResolver
+                            ),
+                            options.reportPath
+                    )
+
+                } else {
+                    compileSourcesFromStdIn(
+                            options.outDir,
+                            createJsByteArrayTranslator(
+                                    moduleResolver
+                            ),
+                            options.reportPath
+                    )
+
+                }
 
             }
 
-            isIdlTranslation-> {
+            isIdlTranslation -> {
                 compile(
                         options.sources,
                         options.outDir,

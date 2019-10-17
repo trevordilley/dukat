@@ -1,5 +1,8 @@
 package org.jetbrains.dukat.translatorString
 
+import kotlinx.serialization.Serializable
+import kotlinx.serialization.json.JsonObject
+import kotlinx.serialization.json.json
 import org.jetbrains.dukat.astCommon.IdentifierEntity
 import org.jetbrains.dukat.astCommon.NameEntity
 import org.jetbrains.dukat.astCommon.QualifierEntity
@@ -35,6 +38,21 @@ fun NameEntity.translate(): String = when (this) {
     }
 }
 
+fun NameEntity.serialize(): JsonObject =
+    when(this) {
+        is IdentifierEntity -> json {
+            "value" to value
+            "kind" to IdentifierEntity::class.java.simpleName
+        }
+        is QualifierEntity -> {
+            if (leftMost() == ROOT_PACKAGENAME) {
+                shiftLeft()!!.serialize()
+            } else {
+                json {"kind" to QualifierEntity::class.java.simpleName
+                        "value" to listOf(left.serialize(), right.serialize()) }
+            }
+        }
+    }
 private fun SourceFileModel.resolveAsTargetName(packageName: NameEntity, clashMap: MutableMap<String, Int>): NameEntity {
     val sourceFile = File(fileName)
     val sourceFileName = sourceFile.name

@@ -1,15 +1,11 @@
 package org.jetbrains.dukat.translatorString
 
+import kotlinx.serialization.json.*
 import org.jetbrains.dukat.astCommon.IdentifierEntity
 import org.jetbrains.dukat.astCommon.NameEntity
 import org.jetbrains.dukat.astModel.*
 import org.jetbrains.dukat.astModel.modifiers.VisibilityModifierModel
-import org.jetbrains.dukat.astModel.statements.AssignmentStatementModel
-import org.jetbrains.dukat.astModel.statements.ChainCallModel
-import org.jetbrains.dukat.astModel.statements.IndexStatementModel
-import org.jetbrains.dukat.astModel.statements.ReturnStatementModel
-import org.jetbrains.dukat.astModel.statements.StatementCallModel
-import org.jetbrains.dukat.astModel.statements.StatementModel
+import org.jetbrains.dukat.astModel.statements.*
 import org.jetbrains.dukat.panic.raiseConcern
 import org.jetbrains.dukat.translator.ModelVisitor
 import org.jetbrains.dukat.translator.ROOT_PACKAGENAME
@@ -88,6 +84,13 @@ fun TypeModel.translate(): String {
     }
 }
 
+private fun serializeParameterModel(parameterModel: ParameterModel): JsonObject = json {
+    "kind" to JsonLiteral(ParameterModel::class.java.simpleName)
+    "name" to JsonLiteral(parameterModel.name)
+    "type" to parameterModel.type.serialize()
+    "vararg" to JsonLiteral(parameterModel.vararg)
+}
+
 private fun ParameterModel.translate(needsMeta: Boolean = true): String {
     var res = name + ": " + type.translate()
     if (vararg) {
@@ -106,6 +109,23 @@ private fun ParameterModel.translate(needsMeta: Boolean = true): String {
     }
 
     return res
+}
+
+
+fun TypeModel.serialize(): JsonObject = json {
+    "kind" to JsonLiteral(TypeModel::class.java.simpleName)
+    "nullable" to JsonLiteral(nullable)
+}
+
+fun TypeParameterModel.serialize(): JsonObject = json {
+    "kind" to JsonLiteral(TypeParameterModel::class.java.simpleName)
+    "type" to type.serialize()
+    "constraints" to jsonArray { constraints.map { it.serialize() } }
+    "variance" to JsonLiteral("$variance")
+}
+
+fun serializeTypeParameterModels(typeParameters: List<TypeParameterModel>): JsonArray = jsonArray {
+    typeParameters.map { it.serialize() }
 }
 
 private fun translateTypeParameters(typeParameters: List<TypeParameterModel>): String {
@@ -146,6 +166,18 @@ private fun translateParameters(parameters: List<ParameterModel>, needsMeta: Boo
             .joinToString(", ")
 }
 
+private fun serializeAnnotations(annotations: List<AnnotationModel>): JsonArray {
+    return jsonArray {
+        annotations.map { a ->
+            json {
+                "kind" to AnnotationModel::class.java.simpleName
+                "name" to a.name
+                "params" to jsonArray { a.params.map { p -> p.serialize() } }
+            }
+        }
+    }
+}
+
 private fun translateAnnotations(annotations: List<AnnotationModel>): String {
     val annotationsResolved = annotations.map { annotationNode ->
         var res = "@" + annotationNode.name
@@ -161,8 +193,10 @@ private fun translateAnnotations(annotations: List<AnnotationModel>): String {
 }
 
 private fun StatementCallModel.translate(): String {
-    return "${value.translate()}${if (typeParameters.isEmpty()) "" else "<${typeParameters.joinToString(", ") { it.value }}>"}${if (params == null) "" else "(${params?.joinToString(", ") { it.value }})"}"
+    return "${value.translate()}${if (typeParameters.isEmpty()) "" else "<${typeParameters.joinToString(
+            ", ") { it.value }}>"}${if (params == null) "" else "(${params?.joinToString(", ") { it.value }})"}"
 }
+
 
 private fun StatementModel.translate(): String {
     return when (this) {
@@ -181,6 +215,21 @@ private fun ClassLikeReferenceModel.translate(): String {
     } else {
         ""
     }
+}
+
+private fun serializeFunctionModel(model: FunctionModel): JsonObject {
+    return json {
+        "kind" to Function::class.java.simpleName
+        "name" to model.name.serialize()
+        "parameters" to jsonArray { model.parameters.map { +serializeParameterModel(it) } }
+        "annotations" to serializeAnnotations(model.annotations)
+        "export" to JsonLiteral(model.export)
+        "inline" to JsonLiteral(model.inline)
+        "operator" to JsonLiteral(model.operator)
+        "type" to model.type.serialize()
+        "typeParameters" to serializeTypeParameterModels(model.typeParameters)
+        model.body
+    }.also { println(it) }
 }
 
 private fun FunctionModel.translate(padding: Int, output: (String) -> Unit) {
@@ -216,7 +265,8 @@ private fun FunctionModel.translate(padding: Int, output: (String) -> Unit) {
     }
 
     output(FORMAT_TAB.repeat(padding) +
-            "${translateAnnotations(annotations)}${visibilityModifier.asClause()}${modifier}${operator} fun${typeParams} ${funName}(${translateParameters(parameters)})${returnClause}${type.translateMeta()}${bodyFirstLine}")
+            "${translateAnnotations(annotations)}${visibilityModifier.asClause()}${modifier}${operator} fun${typeParams} ${funName}(${translateParameters(
+                    parameters)})${returnClause}${type.translateMeta()}${bodyFirstLine}")
 
     if (body.size > 1) {
         body.forEach { statement ->
@@ -244,7 +294,8 @@ private fun MethodModel.translate(): List<String> {
     val overrideClause = if (override) "override " else if (open) "open " else ""
 
     val metaClause = type.translateMeta()
-    return annotations + listOf("${overrideClause}${operatorModifier}fun${typeParams} ${name.translate()}(${translateParameters(parameters)})${returnClause}$metaClause")
+    return annotations + listOf(
+            "${overrideClause}${operatorModifier}fun${typeParams} ${name.translate()}(${translateParameters(parameters)})${returnClause}$metaClause")
 }
 
 private fun ConstructorModel.translate(): List<String> {
@@ -255,6 +306,15 @@ private fun ConstructorModel.translate(): List<String> {
 private fun TypeAliasModel.translate(): String {
     return "typealias ${name.translate()}${translateTypeParameters(typeParameters)} = ${typeReference.translate()}"
 }
+
+private fun TypeAliasModel.serialize(): JsonObject {
+    return json {
+        "kind" to TypeAliasModel::class.java.simpleName
+        "name" to name.serialize()
+        "typeParameters" to typeParameters.map { it.serialize() }
+    }
+}
+
 
 private fun VariableModel.translate(): String {
     val variableKeyword = if (immutable) "val" else "var"
@@ -282,7 +342,8 @@ private fun VariableModel.translate(): String {
     } else {
         extend?.translate() + "." + name.translate()
     }
-    return "${translateAnnotations(annotations)}${visibilityModifier.asClause()}${modifier} ${variableKeyword}${typeParams} ${varName}: ${type.translate()}${type.translateMeta()}${body}"
+    return "${translateAnnotations(
+            annotations)}${visibilityModifier.asClause()}${modifier} ${variableKeyword}${typeParams} ${varName}: ${type.translate()}${type.translateMeta()}${body}"
 }
 
 private fun EnumModel.translate(): String {
@@ -352,7 +413,8 @@ private fun MethodModel.translateSignature(): List<String> {
     val overrideClause = if (override) "override " else ""
 
     val metaClause = type.translateMeta()
-    val methodNodeTranslation = "${overrideClause}${operatorModifier}fun${typeParams} ${name.translate()}(${translateParameters(parameters)})${returnClause}$metaClause"
+    val methodNodeTranslation = "${overrideClause}${operatorModifier}fun${typeParams} ${name.translate()}(${translateParameters(
+            parameters)})${returnClause}$metaClause"
     return annotations + listOf(methodNodeTranslation)
 }
 
@@ -415,7 +477,7 @@ private fun ClassModel.translate(depth: Int): String {
 }
 
 private fun VisibilityModifierModel.translate(): String? {
-    return when(this) {
+    return when (this) {
         VisibilityModifierModel.PUBLIC -> "public"
         VisibilityModifierModel.INTERNAL -> "internal"
         VisibilityModifierModel.PRIVATE -> "private"
@@ -441,7 +503,9 @@ private fun ClassModel.translate(depth: Int, output: (String) -> Unit) {
 
     val openClause = if (abstract) "abstract" else "open"
 
-    val classDeclaration = "${translateAnnotations(annotations)}${visibilityModifier.asClause()}${externalClause}${openClause} class ${name.translate()}${translateTypeParameters(typeParameters)}${params}${parents}"
+    val classDeclaration = "${translateAnnotations(
+            annotations)}${visibilityModifier.asClause()}${externalClause}${openClause} class ${name.translate()}${translateTypeParameters(
+            typeParameters)}${params}${parents}"
 
     val members = members
     val staticMembers = companionObject?.members.orEmpty()
@@ -493,7 +557,8 @@ fun InterfaceModel.translate(padding: Int, output: (String) -> Unit) {
     val parents = translateHeritagModels(parentEntities)
 
     val externalClause = if (external) "${KOTLIN_EXTERNAL_KEYWORD} " else ""
-    output("${translateAnnotations(annotations)}${visibilityModifier.asClause()}${externalClause}interface ${name.translate()}${translateTypeParameters(typeParameters)}${parents}" + if (isBlock) " {" else "")
+    output("${translateAnnotations(annotations)}${visibilityModifier.asClause()}${externalClause}interface ${name.translate()}${translateTypeParameters(
+            typeParameters)}${parents}" + if (isBlock) " {" else "")
     if (isBlock) {
         members.flatMap { it.translateSignature() }.map { FORMAT_TAB.repeat(padding + 1) + it }.forEach { output(it) }
 
@@ -520,20 +585,33 @@ fun InterfaceModel.translate(padding: Int, output: (String) -> Unit) {
 }
 
 
+@UseExperimental(kotlinx.serialization.UnstableDefault::class)
 class StringTranslator : ModelVisitor {
     private var myOutput: MutableList<String> = mutableListOf()
 
+    private val ast = mutableListOf<JsonObject>()
     private fun addOutput(fragment: String) {
         myOutput.add(fragment)
     }
 
+
     fun output(): String {
+        println("Ast?")
+        jsonArray {
+            ast.map { +it }
+        }.let {
+            println(it.toString())
+        }
+
         return myOutput.joinToString(LINE_SEPARATOR)
+
     }
 
     override fun visitTypeAlias(typeAlias: TypeAliasModel) {
         addOutput("")
         addOutput(typeAlias.translate())
+        ast.add(typeAlias.serialize())
+
     }
 
     override fun visitVariable(variable: VariableModel) {
@@ -542,8 +620,10 @@ class StringTranslator : ModelVisitor {
     }
 
     override fun visitFunction(function: FunctionModel) {
+        println("functions")
         addOutput("")
         function.translate(0, ::addOutput)
+        ast.add(serializeFunctionModel(function))
     }
 
     override fun visitObject(objectNode: ObjectModel) {
