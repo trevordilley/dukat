@@ -20,6 +20,20 @@ private fun String?.translateMeta(): String {
     }
 }
 
+private fun CommentModel.serialize() = let {
+    json {
+        when (it) {
+            is SimpleCommentModel -> {
+                "kind" to SimpleCommentModel::class.java.simpleName
+            }
+            is DocumentationCommentModel -> {
+                "kind" to DocumentationCommentModel::class.java.simpleName
+            }
+        }
+        "text" to it.text
+    }
+}
+
 private fun CommentModel.translate(output: (String) -> Unit) {
     when (this) {
         is SimpleCommentModel -> output(text.translateMeta().trim())
@@ -198,6 +212,15 @@ private fun StatementCallModel.translate(): String {
 }
 
 
+private fun StatementModel.serialize() = let { s ->
+    json {
+        "kind" to StatementModel::class.java.simpleName
+        s.metaDescription?.let { m ->
+            "metaDescription" to m
+        }
+    }
+}
+
 private fun StatementModel.translate(): String {
     return when (this) {
         is AssignmentStatementModel -> "${left.translate()} = ${right.translate()}"
@@ -206,6 +229,14 @@ private fun StatementModel.translate(): String {
         is IndexStatementModel -> "${array.translate()}[${index.translate()}]"
         is StatementCallModel -> translate()
         else -> raiseConcern("unkown StatementNode ${this}") { "" }
+    }
+}
+
+private fun ClassLikeReferenceModel.serialize() = let { c ->
+    json {
+        "kind" to ClassLikeReferenceModel::class.java.simpleName
+        "name" to c.name.serialize()
+        "typeParameters" to jsonArray { c.typeParameters.forEach { +it.serialize() } }
     }
 }
 
@@ -229,7 +260,7 @@ private fun serializeFunctionModel(model: FunctionModel): JsonObject {
         "type" to model.type.serialize()
         "typeParameters" to serializeTypeParameterModels(model.typeParameters)
         model.body
-    }.also { println(it) }
+    }
 }
 
 private fun FunctionModel.translate(padding: Int, output: (String) -> Unit) {
@@ -298,6 +329,15 @@ private fun MethodModel.translate(): List<String> {
             "${overrideClause}${operatorModifier}fun${typeParams} ${name.translate()}(${translateParameters(parameters)})${returnClause}$metaClause")
 }
 
+private fun ConstructorModel.serialize() = let {
+    json {
+        "kind" to ConstructorModel::class.java.simpleName
+        "generated" to it.generated
+        "parameters" to jsonArray { it.parameters.forEach { p -> +serializeParameterModel(p) } }
+        "typeParameters" to serializeTypeParameterModels(it.typeParameters)
+    }
+}
+
 private fun ConstructorModel.translate(): List<String> {
     val typeParams = translateTypeParameters(typeParameters)
     return listOf("constructor${typeParams}(${translateParameters(parameters, false)})")
@@ -315,6 +355,28 @@ private fun TypeAliasModel.serialize(): JsonObject {
     }
 }
 
+
+private fun VariableModel.serialize() = let { v ->
+    json {
+        "kind" to VariableModel::class.java.simpleName
+        "annotations" to serializeAnnotations(v.annotations)
+        v.get?.let { g ->
+            "get" to g.serialize()
+        }
+        v.set?.let { s ->
+            "set" to s.serialize()
+        }
+        "immutable" to v.immutable
+        v.initializer?.let { i -> "initializer" to i.serialize() }
+        "inline" to v.inline
+        "type" to v.type.serialize()
+        "typeParameters" to serializeTypeParameterModels(v.typeParameters)
+        v.extend?.let { e ->
+            "extend" to e.serialize()
+        }
+
+    }
+}
 
 private fun VariableModel.translate(): String {
     val variableKeyword = if (immutable) "val" else "var"
@@ -344,6 +406,24 @@ private fun VariableModel.translate(): String {
     }
     return "${translateAnnotations(
             annotations)}${visibilityModifier.asClause()}${modifier} ${variableKeyword}${typeParams} ${varName}: ${type.translate()}${type.translateMeta()}${body}"
+}
+
+private fun EnumModel.serialize() = let { s ->
+    json {
+        "kind" to EnumModel::class.java.simpleName
+        "name" to s.name.serialize()
+        "values" to jsonArray {
+            s.values.forEach { t ->
+                +json {
+                    "kind" to EnumTokenModel::class.java.simpleName
+                    "meta" to t.meta
+                    "value" to t.value
+                }
+            }
+        }
+        "visibilityModifier" to "${s.visibilityModifier}"
+
+    }
 }
 
 private fun EnumModel.translate(): String {
@@ -476,6 +556,7 @@ private fun ClassModel.translate(depth: Int): String {
     return res.joinToString(LINE_SEPARATOR)
 }
 
+
 private fun VisibilityModifierModel.translate(): String? {
     return when (this) {
         VisibilityModifierModel.PUBLIC -> "public"
@@ -489,6 +570,23 @@ private fun VisibilityModifierModel.translate(): String? {
 private fun VisibilityModifierModel.asClause(): String {
     return translate()?.let { "$it " } ?: ""
 }
+
+private fun ClassModel.serialize() = let {
+    json {
+        "kind" to ClassModel::class.java.simpleName
+        "abstract" to it.abstract
+        "annotations" to serializeAnnotations(it.annotations)
+        it.comment?.let { c ->
+            "comment" to c.serialize()
+        }
+        "external" to it.external
+        it.primaryConstructor?.let { c ->
+            "primaryConstructor" to c.serialize()
+        }
+        "typeParameters" to serializeTypeParameterModels(it.typeParameters)
+    }
+}
+
 
 private fun ClassModel.translate(depth: Int, output: (String) -> Unit) {
     val primaryConstructor = primaryConstructor
@@ -546,6 +644,18 @@ private fun InterfaceModel.translate(padding: Int): String {
     return res.joinToString(LINE_SEPARATOR)
 }
 
+private fun InterfaceModel.serialize() = let { i ->
+    json {
+        "kind" to InterfaceModel::class.java.simpleName
+        "annotations" to serializeAnnotations(i.annotations)
+        i.comment?.let {
+            "comment" to it.serialize()
+        }
+        "external" to i.external
+        "typeParameters" to jsonArray { i.typeParameters.forEach { +it.serialize() } }
+    }
+}
+
 fun InterfaceModel.translate(padding: Int, output: (String) -> Unit) {
 
     comment?.translate(output)
@@ -584,6 +694,15 @@ fun InterfaceModel.translate(padding: Int, output: (String) -> Unit) {
     }
 }
 
+// TODO
+fun ObjectModel.serialize() = let { o ->
+    json {
+        "kind" to ObjectModel::class.java.simpleName
+        "name" to o.name.serialize()
+        "visibilityModifier" to "${o.visibilityModifier}"
+        "members" to jsonArray { o.members.forEach { it.translate() } }
+    }
+}
 
 @UseExperimental(kotlinx.serialization.UnstableDefault::class)
 class StringTranslator : ModelVisitor {
@@ -596,7 +715,6 @@ class StringTranslator : ModelVisitor {
 
 
     fun output(): String {
-        println("Ast?")
         jsonArray {
             ast.map { +it }
         }.let {
@@ -617,10 +735,10 @@ class StringTranslator : ModelVisitor {
     override fun visitVariable(variable: VariableModel) {
         addOutput("")
         addOutput(variable.translate())
+        ast.add(variable.serialize())
     }
 
     override fun visitFunction(function: FunctionModel) {
-        println("functions")
         addOutput("")
         function.translate(0, ::addOutput)
         ast.add(serializeFunctionModel(function))
@@ -644,21 +762,26 @@ class StringTranslator : ModelVisitor {
         }
 
         addOutput("}")
+        // TODO: Finish this model
+        ast.add(objectNode.serialize())
     }
 
     override fun visitEnum(enumNode: EnumModel) {
         addOutput("")
         addOutput(enumNode.translate())
+        ast.add(enumNode.serialize())
     }
 
     override fun visitInterface(interfaceModel: InterfaceModel) {
         addOutput("")
         interfaceModel.translate(0, ::addOutput)
+        ast.add(interfaceModel.serialize())
     }
 
     override fun visitClass(classModel: ClassModel) {
         addOutput("")
         classModel.translate(0, ::addOutput)
+        ast.add(classModel.serialize())
     }
 
     fun visitImport(import: NameEntity) {
@@ -688,6 +811,14 @@ class StringTranslator : ModelVisitor {
         moduleModel.imports.forEachIndexed { _, importNode ->
             visitImport(importNode)
         }
+
+        ast.add(json {
+            "kind" to ModuleModel::class.java.simpleName
+            "annotations" to serializeAnnotations(moduleModel.annotations)
+            "name" to moduleModel.name.serialize()
+            "imports" to jsonArray { moduleModel.imports.map { importNode -> +importNode.serialize() } }
+        })
+
     }
 
 }
