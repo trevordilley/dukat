@@ -99,10 +99,10 @@ fun TypeModel.translate(): String {
 }
 
 private fun serializeParameterModel(parameterModel: ParameterModel): JsonObject = json {
-    "kind" to JsonLiteral(ParameterModel::class.java.simpleName)
-    "name" to JsonLiteral(parameterModel.name)
+    "kind" to ParameterModel::class.java.simpleName
+    "name" to parameterModel.name
     "type" to parameterModel.type.serialize()
-    "vararg" to JsonLiteral(parameterModel.vararg)
+    "vararg" to parameterModel.vararg
 }
 
 private fun ParameterModel.translate(needsMeta: Boolean = true): String {
@@ -127,15 +127,15 @@ private fun ParameterModel.translate(needsMeta: Boolean = true): String {
 
 
 fun TypeModel.serialize(): JsonObject = json {
-    "kind" to JsonLiteral(TypeModel::class.java.simpleName)
-    "nullable" to JsonLiteral(nullable)
+    "kind" to TypeModel::class.java.simpleName
+    "nullable" to nullable
 }
 
 fun TypeParameterModel.serialize(): JsonObject = json {
-    "kind" to JsonLiteral(TypeParameterModel::class.java.simpleName)
+    "kind" to TypeParameterModel::class.java.simpleName
     "type" to type.serialize()
     "constraints" to jsonArray { constraints.map { it.serialize() } }
-    "variance" to JsonLiteral("$variance")
+    "variance" to "$variance"
 }
 
 fun serializeTypeParameterModels(typeParameters: List<TypeParameterModel>): JsonArray = jsonArray {
@@ -714,15 +714,8 @@ class StringTranslator : ModelVisitor {
     }
 
 
-    fun output(): String {
-        jsonArray {
-            ast.map { +it }
-        }.let {
-            println(it.toString())
-        }
-
-        return myOutput.joinToString(LINE_SEPARATOR)
-
+    fun output(): Pair<String, JsonArray> {
+        return myOutput.joinToString(LINE_SEPARATOR) to jsonArray { ast.forEach { +it } }
     }
 
     override fun visitTypeAlias(typeAlias: TypeAliasModel) {

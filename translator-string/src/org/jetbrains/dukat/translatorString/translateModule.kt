@@ -1,26 +1,14 @@
 package org.jetbrains.dukat.translatorString
 
-import kotlinx.serialization.Serializable
 import kotlinx.serialization.json.JsonObject
 import kotlinx.serialization.json.json
-import org.jetbrains.dukat.astCommon.IdentifierEntity
-import org.jetbrains.dukat.astCommon.NameEntity
-import org.jetbrains.dukat.astCommon.QualifierEntity
-import org.jetbrains.dukat.astCommon.appendLeft
-import org.jetbrains.dukat.astCommon.leftMost
-import org.jetbrains.dukat.astCommon.process
-import org.jetbrains.dukat.astCommon.shiftLeft
+import org.jetbrains.dukat.astCommon.*
 import org.jetbrains.dukat.astModel.SourceBundleModel
 import org.jetbrains.dukat.astModel.SourceFileModel
 import org.jetbrains.dukat.astModel.SourceSetModel
 import org.jetbrains.dukat.astModel.flattenDeclarations
 import org.jetbrains.dukat.moduleNameResolver.CommonJsNameResolver
-import org.jetbrains.dukat.translator.InputTranslator
-import org.jetbrains.dukat.translator.ModuleTranslationUnit
-import org.jetbrains.dukat.translator.ROOT_PACKAGENAME
-import org.jetbrains.dukat.translator.TranslationErrorFileNotFound
-import org.jetbrains.dukat.translator.TranslationErrorInvalidFile
-import org.jetbrains.dukat.translator.TranslationUnitResult
+import org.jetbrains.dukat.translator.*
 import java.io.File
 
 private fun unescape(name: String): String {
@@ -39,20 +27,23 @@ fun NameEntity.translate(): String = when (this) {
 }
 
 fun NameEntity.serialize(): JsonObject =
-    when(this) {
-        is IdentifierEntity -> json {
-            "value" to value
-            "kind" to IdentifierEntity::class.java.simpleName
-        }
-        is QualifierEntity -> {
-            if (leftMost() == ROOT_PACKAGENAME) {
-                shiftLeft()!!.serialize()
-            } else {
-                json {"kind" to QualifierEntity::class.java.simpleName
-                        "value" to listOf(left.serialize(), right.serialize()) }
+        when (this) {
+            is IdentifierEntity -> json {
+                "value" to value
+                "kind" to IdentifierEntity::class.java.simpleName
+            }
+            is QualifierEntity -> {
+                if (leftMost() == ROOT_PACKAGENAME) {
+                    shiftLeft()!!.serialize()
+                } else {
+                    json {
+                        "kind" to QualifierEntity::class.java.simpleName
+                        "value" to listOf(left.serialize(), right.serialize())
+                    }
+                }
             }
         }
-    }
+
 private fun SourceFileModel.resolveAsTargetName(packageName: NameEntity, clashMap: MutableMap<String, Int>): NameEntity {
     val sourceFile = File(fileName)
     val sourceFileName = sourceFile.name
@@ -99,7 +90,9 @@ fun translateModule(sourceFile: SourceFileModel): List<ModuleTranslationUnit> {
     return docRoot.flattenDeclarations().map { module ->
         val stringTranslator = StringTranslator()
         stringTranslator.process(module)
-        ModuleTranslationUnit(sourceFile.resolveAsTargetName(module.name, clashMap).translate(), sourceFile.fileName, module.name, stringTranslator.output())
+        val (content, ast) = stringTranslator.output()
+        println("$ast")
+        ModuleTranslationUnit(sourceFile.resolveAsTargetName(module.name, clashMap).translate(), sourceFile.fileName, module.name, content, ast)
     }
 }
 
@@ -132,8 +125,8 @@ fun translateModule(data: ByteArray, translator: InputTranslator<ByteArray>): Li
 
 fun translateModule(fileName: String, translator: InputTranslator<String>): List<TranslationUnitResult> {
     if (!fileName.endsWith(TS_DECLARATION_EXTENSION) &&
-        !fileName.endsWith(IDL_DECLARATION_EXTENSION) &&
-        !fileName.endsWith(WEBIDL_DECLARATION_EXTENSION)) {
+            !fileName.endsWith(IDL_DECLARATION_EXTENSION) &&
+            !fileName.endsWith(WEBIDL_DECLARATION_EXTENSION)) {
         return listOf(TranslationErrorInvalidFile(fileName))
     }
 

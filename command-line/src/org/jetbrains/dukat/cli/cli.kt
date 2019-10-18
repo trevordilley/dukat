@@ -33,17 +33,9 @@ private fun TranslationUnitResult.resolveAsError(source: String): String {
     }
 }
 
-private fun compileSourcesFromByteArray(outDir: String?, filenames: List<String>, translator: InputTranslator<ByteArray>, pathToReport: String?) {
-    val translatedUnits: List<TranslationUnitResult> = filenames.flatMap { filename ->
-        val sourceFile = File(filename)
-        translateModule(sourceFile.readBytes(), translator)
-    }
-    compileUnits(translatedUnits, outDir, pathToReport)
-}
-
-private fun compileSourcesFromStdIn(outDir: String?, translator: InputTranslator<ByteArray>, pathToReport: String?) {
+private fun compileSourcesFromStdIn(outDir: String?, translator: InputTranslator<ByteArray>, pathToReport: String?, writeAstInstead: Boolean = false) {
     val translatedUnits = translateModule(System.`in`.readBytes(), translator)
-    compileUnits(translatedUnits, outDir, pathToReport)
+    compileUnits(translatedUnits, outDir, pathToReport, writeAstInstead)
 }
 
 private fun compile(filenames: List<String>, outDir: String?, translator: InputTranslator<String>, pathToReport: String?) {
@@ -56,7 +48,15 @@ private fun compile(filenames: List<String>, outDir: String?, translator: InputT
     compileUnits(translatedUnits, outDir, pathToReport)
 }
 
-private fun compileUnits(translatedUnits: List<TranslationUnitResult>, outDir: String?, pathToReport: String?) {
+private fun writeUnit(dirFile: File, name: String, content: String, fileExtension: String): String {
+    val targetName = "$name.$fileExtension"
+    val resolvedTarget = dirFile.resolve(targetName)
+    println(resolvedTarget.name)
+    resolvedTarget.writeText(content)
+    return resolvedTarget.name
+}
+
+private fun compileUnits(translatedUnits: List<TranslationUnitResult>, outDir: String?, pathToReport: String?, writeAstInstead: Boolean = false) {
     val dirFile = File(outDir ?: "./")
     if (translatedUnits.isNotEmpty()) {
         dirFile.mkdirs()
@@ -68,17 +68,30 @@ private fun compileUnits(translatedUnits: List<TranslationUnitResult>, outDir: S
 
     translatedUnits.forEach { translationUnitResult ->
         if (translationUnitResult is ModuleTranslationUnit) {
-            val targetName = "${translationUnitResult.name}.kt"
+            if (!writeAstInstead) {
+                val resolvedKtName =
+                        writeUnit(
+                                dirFile,
+                                translationUnitResult.name,
+                                translationUnitResult.content,
+                                "kt"
+                        )
 
-            val resolvedTarget = dirFile.resolve(targetName)
-
-            println(resolvedTarget.name)
-
-            if (buildReport) {
-                output.add(resolvedTarget.name)
+                if (buildReport) {
+                    output.add(resolvedKtName)
+                }
+            } else {
+                println("Writing AST for ${translationUnitResult.name}")
+                val resolvedAstName =
+                        writeUnit(
+                                dirFile,
+                                translationUnitResult.name,
+                                translationUnitResult.ast.toString(),
+                                "ast.json"
+                        )
+                output.add(resolvedAstName)
             }
 
-            resolvedTarget.writeText(translationUnitResult.content)
         } else {
             val fileName = when (translationUnitResult) {
                 is TranslationErrorInvalidFile -> translationUnitResult.fileName
@@ -128,7 +141,7 @@ where possible options include:
     -m  String                      use this value as @file:JsModule annotation value whenever such annotation occurs
     -d  <path>                      destination directory for files with converted declarations (by default declarations are generated in current directory)
     -v, -version                    print version
-    --file                          read file paths instead of from stdio (useful when running cli jar directly)
+    --ast                           Instead of outputting kotlin source, output a JSON representation of the d.ts AST (useful for other languages to construct js interop bindings) 
 """.trimIndent())
 }
 
@@ -140,7 +153,7 @@ private data class CliOptions(
         val jsModuleName: String?,
         val reportPath: String?,
         val tsDefaultLib: String,
-        val forceReadFilePath: Boolean
+        val writeAst: Boolean
 )
 
 
@@ -160,7 +173,7 @@ private fun process(args: List<String>): CliOptions? {
     var basePackageName: NameEntity = ROOT_PACKAGENAME
     var jsModuleName: String? = null
     var reportPath: String? = null
-    var forceReadFilePath: Boolean = false
+    var writeAst: Boolean = false
     while (argsIterator.hasNext()) {
         val arg = argsIterator.next()
         when (arg) {
@@ -208,9 +221,11 @@ private fun process(args: List<String>): CliOptions? {
 
             }
 
-            "--file" -> {
-                forceReadFilePath = true
+            "-a" -> {
+                writeAst = true
+                print("Writing out AST instead of Kotlin Source")
             }
+
 
             else -> when {
                 arg.equals("-") -> sources.add("-")
@@ -235,7 +250,7 @@ following file extensions are supported:
 
     val tsDefaultLib = File(PACKAGE_DIR, "d.ts.libs/lib.d.ts").absolutePath;
 
-    return CliOptions(sources, outDir, basePackageName, jsModuleName, reportPath, tsDefaultLib, forceReadFilePath)
+    return CliOptions(sources, outDir, basePackageName, jsModuleName, reportPath, tsDefaultLib, writeAst)
 }
 
 fun main(vararg args: String) {
@@ -265,27 +280,14 @@ fun main(vararg args: String) {
 
         when {
             isTsTranslation -> {
-                if (options.forceReadFilePath) {
-                    compileSourcesFromByteArray(
-                            options.outDir,
-                            options.sources,
-                            createJsByteArrayTranslator(
-                                    moduleResolver
-                            ),
-                            options.reportPath
-                    )
-
-                } else {
-                    compileSourcesFromStdIn(
-                            options.outDir,
-                            createJsByteArrayTranslator(
-                                    moduleResolver
-                            ),
-                            options.reportPath
-                    )
-
-                }
-
+                compileSourcesFromStdIn(
+                        options.outDir,
+                        createJsByteArrayTranslator(
+                                moduleResolver
+                        ),
+                        options.reportPath,
+                        options.writeAst
+                )
             }
 
             isIdlTranslation -> {
