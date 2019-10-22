@@ -126,11 +126,6 @@ private fun ParameterModel.translate(needsMeta: Boolean = true): String {
 }
 
 
-fun TypeModel.serialize(): JsonObject = json {
-    "kind" to TypeModel::class.java.simpleName
-    "nullable" to nullable
-}
-
 fun TypeParameterModel.serialize(): JsonObject = json {
     "kind" to TypeParameterModel::class.java.simpleName
     "type" to type.serialize()
@@ -518,6 +513,37 @@ private fun translateHeritagModels(parentEntities: List<HeritageModel>): String 
     return parents
 }
 
+private fun FunctionTypeModel.serialize(): JsonObject = let { f ->
+    json {
+        "kind" to FunctionTypeModel::class.java.simpleName
+        f.metaDescription?.let {
+            "metaDescription" to f.metaDescription
+        }
+        "parameters" to jsonArray { f.parameters.forEach { +serializeParameterModel(it) } }
+        "type" to f.type.serialize()
+    }
+}
+
+private fun TypeValueModel.serialize() = let { t ->
+    json {
+        "kind" to TypeValueModel::class.java.simpleName
+        t.metaDescription?.let {
+            "metaDescription" to t.metaDescription
+        }
+        "params" to serializeTypeParameterModels(t.params)
+        "value" to t.value.serialize()
+    }
+}
+
+
+private fun TypeModel.serialize() = let { t ->
+    when (t) {
+        is FunctionTypeModel -> t.serialize()
+        is TypeValueModel -> t.serialize()
+        else -> throw RuntimeException("Unknown TypeModel ${this}")
+    }
+}
+
 private fun TypeModel.translateAsHeritageClause(): String {
     return when (this) {
         is FunctionTypeModel -> translate()
@@ -537,6 +563,15 @@ private fun TypeModel.translateAsHeritageClause(): String {
     }
 }
 
+
+private fun DelegationModel.serialize(): JsonObject = let { d ->
+    when (d) {
+        is ClassModel -> d.serialize()
+        is ExternalDelegationModel -> d.serialize()
+        else -> throw RuntimeException("Unknown DelegationModel ${d}")
+    }
+}
+
 private fun DelegationModel.translate(): String {
     return when (this) {
         is ClassModel -> name.translate()
@@ -549,6 +584,19 @@ private fun HeritageModel.translateAsHeritageClause(): String {
     val delegationClause = delegateTo?.let { " by ${it.translate()}" } ?: ""
     return "${value.translateAsHeritageClause()}${delegationClause}"
 }
+
+private fun HeritageModel.serialize() = let { h ->
+    json {
+        "kind" to HeritageModel::class.java.simpleName
+        "value" to h.value.serialize()
+        "typeParams" to jsonArray { h.typeParams.forEach { +it.serialize() } }
+        h.delegateTo?.let {
+            "delegateTo" to it.serialize()
+        }
+    }
+
+}
+
 
 private fun ClassModel.translate(depth: Int): String {
     val res = mutableListOf<String>()
@@ -694,13 +742,53 @@ fun InterfaceModel.translate(padding: Int, output: (String) -> Unit) {
     }
 }
 
-// TODO
+fun MethodModel.serialize() = let { m ->
+    json {
+        "kind" to MethodModel::class.java.simpleName
+        "annotations" to serializeAnnotations(m.annotations)
+        "name" to m.name.serialize()
+        "open" to m.open
+        "operator" to m.operator
+        "override" to m.override
+        "static" to m.static
+        "type" to m.type.serialize()
+        "typeParameters" to serializeTypeParameterModels(m.typeParameters)
+    }
+}
+
+fun PropertyModel.serialize() = let { p ->
+    json {
+        "kind" to PropertyModel::class.java.simpleName
+        "getter" to p.getter
+        "name" to p.name.serialize()
+        "open" to p.open
+        "override" to p.override
+        "setter" to p.setter
+        "static" to p.static
+        "type" to p.type.serialize()
+        "typeParameters" to serializeTypeParameterModels(p.typeParameters)
+    }
+}
+
+
+fun MemberModel.serialize() = let { s ->
+    when (s) {
+        is MethodModel -> s.serialize()
+        is PropertyModel -> s.serialize()
+        is ConstructorModel -> s.serialize()
+        is ClassModel -> s.serialize()
+        is InterfaceModel -> s.serialize()
+        else -> throw RuntimeException("Unknown MemberModel ${this}")
+    }
+}
+
 fun ObjectModel.serialize() = let { o ->
     json {
         "kind" to ObjectModel::class.java.simpleName
         "name" to o.name.serialize()
         "visibilityModifier" to "${o.visibilityModifier}"
-        "members" to jsonArray { o.members.forEach { it.translate() } }
+        "members" to jsonArray { o.members.forEach { it.serialize() } }
+        "parentEntities" to jsonArray { o.parentEntities.forEach { it.serialize() } }
     }
 }
 

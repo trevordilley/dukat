@@ -51,7 +51,6 @@ private fun compile(filenames: List<String>, outDir: String?, translator: InputT
 private fun writeUnit(dirFile: File, name: String, content: String, fileExtension: String): String {
     val targetName = "$name.$fileExtension"
     val resolvedTarget = dirFile.resolve(targetName)
-    println("Resolving: ${resolvedTarget.name}")
     resolvedTarget.writeText(content)
     return resolvedTarget.name
 }

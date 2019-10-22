@@ -33,16 +33,14 @@ fun NameEntity.serialize(): JsonObject =
                 "kind" to IdentifierEntity::class.java.simpleName
             }
             is QualifierEntity -> {
-                if (leftMost() == ROOT_PACKAGENAME) {
-                    shiftLeft()!!.serialize()
-                } else {
-                    json {
-                        "kind" to QualifierEntity::class.java.simpleName
-                        "value" to listOf(left.serialize(), right.serialize())
-                    }
+                json {
+                    "kind" to QualifierEntity::class.java.simpleName
+                    "left" to left.serialize()
+                    "right" to right.serialize()
                 }
             }
         }
+
 
 private fun SourceFileModel.resolveAsTargetName(packageName: NameEntity, clashMap: MutableMap<String, Int>): NameEntity {
     val sourceFile = File(fileName)
@@ -91,7 +89,6 @@ fun translateModule(sourceFile: SourceFileModel): List<ModuleTranslationUnit> {
         val stringTranslator = StringTranslator()
         stringTranslator.process(module)
         val (content, ast) = stringTranslator.output()
-        println("$ast")
         ModuleTranslationUnit(sourceFile.resolveAsTargetName(module.name, clashMap).translate(), sourceFile.fileName, module.name, content, ast)
     }
 }
