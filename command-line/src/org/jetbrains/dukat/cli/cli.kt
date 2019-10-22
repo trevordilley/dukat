@@ -51,7 +51,7 @@ private fun compile(filenames: List<String>, outDir: String?, translator: InputT
 private fun writeUnit(dirFile: File, name: String, content: String, fileExtension: String): String {
     val targetName = "$name.$fileExtension"
     val resolvedTarget = dirFile.resolve(targetName)
-    println(resolvedTarget.name)
+    println("Resolving: ${resolvedTarget.name}")
     resolvedTarget.writeText(content)
     return resolvedTarget.name
 }
@@ -68,30 +68,16 @@ private fun compileUnits(translatedUnits: List<TranslationUnitResult>, outDir: S
 
     translatedUnits.forEach { translationUnitResult ->
         if (translationUnitResult is ModuleTranslationUnit) {
-            if (!writeAstInstead) {
-                val resolvedKtName =
-                        writeUnit(
-                                dirFile,
-                                translationUnitResult.name,
-                                translationUnitResult.content,
-                                "kt"
-                        )
-
-                if (buildReport) {
-                    output.add(resolvedKtName)
-                }
-            } else {
-                println("Writing AST for ${translationUnitResult.name}")
-                val resolvedAstName =
-                        writeUnit(
-                                dirFile,
-                                translationUnitResult.name,
-                                translationUnitResult.ast.toString(),
-                                "ast.json"
-                        )
-                output.add(resolvedAstName)
+            val (name, _, _, content, ast) = translationUnitResult
+            val resolvedName = writeUnit(
+                    dirFile,
+                    name,
+                    if (!writeAstInstead) content else "$ast",
+                    if (!writeAstInstead) "kt" else "json"
+            )
+            if (buildReport) {
+                output.add(resolvedName)
             }
-
         } else {
             val fileName = when (translationUnitResult) {
                 is TranslationErrorInvalidFile -> translationUnitResult.fileName
@@ -173,12 +159,18 @@ private fun process(args: List<String>): CliOptions? {
     var basePackageName: NameEntity = ROOT_PACKAGENAME
     var jsModuleName: String? = null
     var reportPath: String? = null
-    var writeAst: Boolean = false
+    var writeAst = false
     while (argsIterator.hasNext()) {
         val arg = argsIterator.next()
         when (arg) {
             "--always-fail" -> {
                 setPanicMode(PanicMode.ALWAYS_FAIL)
+            }
+            "--ast" -> {
+                writeAst = argsIterator.readArg()?.toBoolean() ?: {
+                    printError("--ast should be followed by true or false")
+                    false
+                }.invoke()
             }
             "-d" -> {
                 val outDirArg = argsIterator.readArg()
@@ -219,11 +211,6 @@ private fun process(args: List<String>): CliOptions? {
                     return null
                 }
 
-            }
-
-            "-a" -> {
-                writeAst = true
-                print("Writing out AST instead of Kotlin Source")
             }
 
 
