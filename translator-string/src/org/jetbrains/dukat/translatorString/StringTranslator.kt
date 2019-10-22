@@ -619,19 +619,27 @@ private fun VisibilityModifierModel.asClause(): String {
     return translate()?.let { "$it " } ?: ""
 }
 
-private fun ClassModel.serialize() = let {
+private fun ClassModel.serialize() = let { c ->
+    println("Serializing ClassModel")
     json {
         "kind" to ClassModel::class.java.simpleName
-        "abstract" to it.abstract
-        "annotations" to serializeAnnotations(it.annotations)
-        it.comment?.let { c ->
+        "abstract" to c.abstract
+        "annotations" to serializeAnnotations(c.annotations)
+        c.comment?.let { c ->
             "comment" to c.serialize()
         }
-        "external" to it.external
-        it.primaryConstructor?.let { c ->
+        "external" to c.external
+        c.primaryConstructor?.let { c ->
             "primaryConstructor" to c.serialize()
         }
-        "typeParameters" to serializeTypeParameterModels(it.typeParameters)
+        "typeParameters" to serializeTypeParameterModels(c.typeParameters)
+        "members" to jsonArray { c.members.forEach { +it.serialize() } }
+        c.companionObject?.let { o ->
+            "companionObject" to o.serialize()
+        }
+        "name" to c.name.serialize()
+        "parentEntities" to jsonArray { c.parentEntities.forEach { +it.serialize() } }
+        "visibilityModifier" to "${c.visibilityModifier}"
     }
 }
 
@@ -771,7 +779,7 @@ fun PropertyModel.serialize() = let { p ->
 }
 
 
-fun MemberModel.serialize() = let { s ->
+fun MemberModel.serialize(): JsonObject = let { s ->
     when (s) {
         is MethodModel -> s.serialize()
         is PropertyModel -> s.serialize()
@@ -869,6 +877,17 @@ class StringTranslator : ModelVisitor {
         addOutput("import ${import.translate()}")
     }
 
+    private fun ModuleModel.serialize(): JsonObject = let { m ->
+        json {
+            "kind" to ModuleModel::class.java.simpleName
+            "annotations" to serializeAnnotations(m.annotations)
+            "name" to m.name.serialize()
+            "imports" to jsonArray { m.imports.map { importNode -> +importNode.serialize() } }
+            "shortName" to m.shortName.serialize()
+            "submodules" to jsonArray { m.submodules.forEach { +it.serialize() } }
+        }
+    }
+
     override fun visitModule(moduleModel: ModuleModel) {
         if (moduleModel.declarations.isEmpty() && moduleModel.submodules.isEmpty()) {
             return
@@ -893,12 +912,7 @@ class StringTranslator : ModelVisitor {
             visitImport(importNode)
         }
 
-        ast.add(json {
-            "kind" to ModuleModel::class.java.simpleName
-            "annotations" to serializeAnnotations(moduleModel.annotations)
-            "name" to moduleModel.name.serialize()
-            "imports" to jsonArray { moduleModel.imports.map { importNode -> +importNode.serialize() } }
-        })
+        ast.add(moduleModel.serialize())
 
     }
 
